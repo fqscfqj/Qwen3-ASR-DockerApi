@@ -2,6 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/qwen3-asr-toolkit.svg)](https://badge.fury.io/py/qwen3-asr-toolkit)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Also in](https://img.shields.io/badge/Also%20in-Java-orange.svg)](#-implementations-in-other-languages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An advanced, high-performance Python command-line toolkit for using the **Qwen-ASR API** (formerly Qwen3-ASR-Flash). This implementation overcomes the API's 3-minute audio length limitation by intelligently splitting long audio/video files and processing them in parallel, enabling rapid transcription of hours-long content.
@@ -171,6 +172,18 @@ Use the `-s` or `--silence` flag to prevent progress details from being printed 
 ```bash
 qwen3-asr -i "/path/to/my/meeting_recording.m4a" -s
 ```
+
+## 🌍 Implementations in Other Languages
+
+While this project provides a full-featured Python toolkit, we also host implementations in other programming languages to demonstrate how the same core logic can be applied across different technology stacks. We warmly welcome the community to contribute examples in more languages!
+
+### ☕ Java Example
+
+We have provided a Java version as a standalone example located in the `examples/java-example` directory of this repository. This example showcases how to implement the key features of the toolkit—including VAD-based audio chunking, parallel API requests, and result aggregation—using Java. It serves as a great starting point for Java developers looking to integrate Qwen-ASR into their applications.
+
+### How to Contribute Your Version
+
+If you have implemented a similar toolkit in another language (e.g., **Go**, **Rust**, **C#**, **JavaScript/Node.js**), we would love to feature it! Please open a pull request to add your implementation to the `examples` directory. For more details on contributing, see the [Contributing](#-contributing) section below.
 
 ## 🤝 Contributing
 
