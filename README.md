@@ -5,9 +5,9 @@
 [![Also in](https://img.shields.io/badge/Also%20in-Java-orange.svg)](#-implementations-in-other-languages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 😊 Important Notice: 
+## 😊 Important Notice
 
-Qwen3-ASR is now open-sourced. Welcome to visit the [GitHub](https://github.com/QwenLM/Qwen3-ASR) and [blog](https://qwen.ai/blog?id=qwen3asr) for more information. The open-source model offers functionality comparable to the API and supports free, fast local deployment. Qwen3-ASR open-source model includes two powerful all-in-one speech recognition models that support language identification and ASR for 52 languages and dialects, as well as a novel non-autoregressive speech forced-alignment model that can align text–speech pairs in 11 languages. Its powerful performance is sufficient to deliver highly compelling speech-to-text transcription capabilities. Welcome to use it!
+Qwen3-ASR is now **open-sourced**. Welcome to visit the [**GitHub**](https://github.com/QwenLM/Qwen3-ASR) and [**blog**](https://qwen.ai/blog?id=qwen3asr) for more information. The open-source model offers functionality comparable to the API and supports free, fast local deployment. Qwen3-ASR open-source model includes two powerful **all-in-one speech recognition models (0.6B/1.7B)** that support language identification and ASR for **52 languages and dialects**, as well as a novel non-autoregressive speech forced-alignment model that can align text–speech pairs in 11 languages. Its powerful performance is sufficient to deliver highly compelling speech-to-text transcription capabilities. Welcome to use it!
 
 ## Overview 
 
