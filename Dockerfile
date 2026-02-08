@@ -3,6 +3,7 @@ FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MODEL_ID=Qwen/Qwen3-ASR-1.7B \
+    MODEL_NAME=qwen3-asr-1.7b \
     MODEL_CACHE_DIR=/models
 
 WORKDIR /app
@@ -13,8 +14,8 @@ RUN apt-get update \
 
 RUN mkdir -p /models
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-server.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-server.txt
 
 COPY . .
 

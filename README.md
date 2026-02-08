@@ -15,7 +15,7 @@ An advanced, high-performance Python command-line toolkit for using the **Qwen-A
 
 ## 🐳 OpenAI-Compatible Docker API Server
 
-This repository now includes a FastAPI service that exposes an OpenAI-compatible `/v1/audio/transcriptions` endpoint backed by the **Qwen/Qwen3-ASR-1.7B** model. The model is downloaded automatically on first request, runs on CUDA when available, lazily loads, and frees GPU memory after a period of inactivity.
+This repository now includes a FastAPI service that exposes an OpenAI-compatible `/v1/audio/transcriptions` endpoint backed by the **Qwen/Qwen3-ASR-1.7B** model. The OpenAI-facing model name is **`qwen3-asr-1.7b`** (configurable), while the Hugging Face model ID is used for downloads. The model is downloaded automatically on first request, runs on CUDA when available, lazily loads, and frees GPU memory after a period of inactivity.
 
 ### Run with Docker
 
@@ -27,24 +27,34 @@ docker run --gpus all -p 8000:8000 \
   qwen3-asr-api
 ```
 
+### Docker Compose
+
+```bash
+docker compose up --build
+```
+
 ### Request Example
 
 ```bash
 curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
   -F file=@/path/to/audio.wav \
+  -F model=qwen3-asr-1.7b \
   -F response_format=json
 ```
 
-The endpoint accepts OpenAI form fields like `model`, `language`, and `prompt` for compatibility. `model` defaults to `Qwen/Qwen3-ASR-1.7B` and also accepts the `whisper-1` alias; `language` and `prompt` are currently accepted but not applied to inference.
+The endpoint accepts OpenAI form fields like `model`, `language`, and `prompt` for compatibility. `model` defaults to `qwen3-asr-1.7b` and also accepts the `whisper-1` alias or the Hugging Face model ID; `language` and `prompt` are currently accepted but not applied to inference.
 
 ### Configuration
 
 | Environment Variable | Default | Description |
 | --- | --- | --- |
 | `MODEL_ID` | `Qwen/Qwen3-ASR-1.7B` | Hugging Face model ID to load automatically |
+| `MODEL_NAME` | `qwen3-asr-1.7b` | OpenAI-facing model name for the `model` form field |
 | `MODEL_CACHE_DIR` | `/models` (Docker) | Cache directory for model downloads |
 | `MODEL_DEVICE` | `auto` | `auto`, `cuda`, or `cpu` |
 | `MODEL_IDLE_TIMEOUT` | `600` | Seconds before unloading the model to free GPU memory (`0` disables) |
+| `MAX_UPLOAD_MB` | `100` | Max upload size in megabytes before returning HTTP 413 |
+| `MAX_CONCURRENT_INFERENCES` | `1` | Limits concurrent inference requests per process |
 
 ### GitHub Actions (GHCR)
 

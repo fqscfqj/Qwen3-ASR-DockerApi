@@ -1,4 +1,5 @@
 import gc
+import logging
 import os
 import tempfile
 import threading
@@ -16,10 +17,18 @@ from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
 WAV_SAMPLE_RATE = 16000
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-ASR-1.7B")
+MODEL_NAME = os.getenv("MODEL_NAME", "qwen3-asr-1.7b")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR")
 MODEL_IDLE_TIMEOUT = int(os.getenv("MODEL_IDLE_TIMEOUT", "600"))
 MODEL_DEVICE = os.getenv("MODEL_DEVICE", "auto")
-MODEL_ALIASES = {MODEL_ID, "whisper-1"}
+MODEL_ALIASES = {MODEL_ID.lower(), MODEL_NAME.lower(), "whisper-1"}
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+MAX_CONCURRENT_INFERENCES = max(1, int(os.getenv("MAX_CONCURRENT_INFERENCES", "1")))
+INFERENCE_SEMAPHORE = threading.Semaphore(MAX_CONCURRENT_INFERENCES)
+UPLOAD_CHUNK_SIZE = 1024 * 1024
+
+logger = logging.getLogger("qwen3_asr_toolkit.server")
 
 
 def should_use_cuda() -> bool:
@@ -57,6 +66,20 @@ def decode_audio(data: bytes, filename: Optional[str]) -> Tuple[np.ndarray, floa
         samples /= max_value
     duration = len(segment) / 1000.0
     return samples, duration
+
+
+async def read_upload(file: UploadFile) -> bytes:
+    size = 0
+    chunks = []
+    while True:
+        chunk = await file.read(UPLOAD_CHUNK_SIZE)
+        if not chunk:
+            break
+        size += len(chunk)
+        if size > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Audio file is too large.")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 class ModelManager:
@@ -105,7 +128,11 @@ class ModelManager:
         with self._lock:
             self._active_requests += 1
             if self._pipeline is None:
-                self._pipeline = self._build_pipeline()
+                try:
+                    self._pipeline = self._build_pipeline()
+                except Exception:
+                    self._active_requests = max(0, self._active_requests - 1)
+                    raise
             self._last_used = time.time()
             return self._pipeline
 
@@ -139,11 +166,15 @@ model_manager = ModelManager(MODEL_ID, MODEL_CACHE_DIR, MODEL_IDLE_TIMEOUT)
 
 
 def run_transcription(samples: np.ndarray) -> dict:
-    pipe = model_manager.acquire()
+    INFERENCE_SEMAPHORE.acquire()
     try:
-        return pipe(samples, sampling_rate=WAV_SAMPLE_RATE)
+        pipe = model_manager.acquire()
+        try:
+            return pipe(samples, sampling_rate=WAV_SAMPLE_RATE)
+        finally:
+            model_manager.release()
     finally:
-        model_manager.release()
+        INFERENCE_SEMAPHORE.release()
 
 
 @asynccontextmanager
@@ -169,21 +200,24 @@ async def transcriptions(
     prompt: Optional[str] = Form(None),
     response_format: str = Form("json"),
 ):
-    if model and model not in MODEL_ALIASES:
-        raise HTTPException(status_code=400, detail=f"Unsupported model '{model}'.")
+    """OpenAI-compatible transcription endpoint (model/language/prompt accepted for compatibility)."""
+    if model and model.lower() not in MODEL_ALIASES:
+        raise HTTPException(status_code=400, detail="Unsupported model.")
     if not file:
         raise HTTPException(status_code=400, detail="Missing audio file.")
-    data = await file.read()
+    data = await read_upload(file)
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio file.")
     try:
         samples, duration = await run_in_threadpool(decode_audio, data, file.filename)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to decode audio: {exc}") from exc
+    except Exception:
+        logger.exception("Failed to decode audio upload.")
+        raise HTTPException(status_code=400, detail="Failed to decode audio.") from None
     try:
         result = await run_in_threadpool(run_transcription, samples)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"ASR inference failed: {exc}") from exc
+    except Exception:
+        logger.exception("ASR inference failed.")
+        raise HTTPException(status_code=500, detail="ASR inference failed.") from None
     text = result.get("text") if isinstance(result, dict) else str(result)
     if response_format == "text":
         return PlainTextResponse(text)
