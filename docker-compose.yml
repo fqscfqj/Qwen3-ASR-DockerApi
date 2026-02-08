@@ -1,6 +1,6 @@
 services:
   qwen3-asr:
-    build: .
+    image: ghcr.io/fqscfqj/qwen3-asr-dockerapi:latest
     ports:
       - "8000:8000"
     environment:

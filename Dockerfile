@@ -14,8 +14,8 @@ RUN apt-get update \
 
 RUN mkdir -p /models
 
-COPY requirements.txt requirements-server.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-server.txt
+COPY requirements-server.txt ./
+RUN pip install --no-cache-dir -r requirements-server.txt
 
 COPY . .
 
