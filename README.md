@@ -67,6 +67,8 @@ curl http://localhost:8000/health
 {"status":"ok","model_loaded":false}
 ```
 
+`model_loaded` 表示当前进程是否已加载模型，首次推理完成后会变为 `true`，当空闲超时触发卸载时可能恢复为 `false`。
+
 ## 📄 License
 
 MIT License，详见 [LICENSE](LICENSE)。
