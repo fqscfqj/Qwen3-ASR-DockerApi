@@ -12,8 +12,8 @@ import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydub import AudioSegment
+from qwen_asr import Qwen3ASRModel
 from starlette.concurrency import run_in_threadpool
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
 WAV_SAMPLE_RATE = 16000
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-ASR-1.7B")
@@ -91,30 +91,21 @@ class ModelManager:
         self._cache_dir = cache_dir
         self._idle_timeout = idle_timeout
         self._use_cuda = should_use_cuda()
-        self._pipeline = None
+        self._model = None
         self._last_used = 0.0
         self._active_requests = 0
         self._lock = threading.Lock()
         self._shutdown = threading.Event()
         self._cleanup_thread: Optional[threading.Thread] = None
 
-    def _build_pipeline(self):
+    def _build_model(self):
         torch_dtype = torch.float16 if self._use_cuda else torch.float32
-        processor = AutoProcessor.from_pretrained(self._model_id, cache_dir=self._cache_dir)
-        model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        device_map = "cuda:0" if self._use_cuda else "cpu"
+        return Qwen3ASRModel.from_pretrained(
             self._model_id,
             cache_dir=self._cache_dir,
-            torch_dtype=torch_dtype,
-            low_cpu_mem_usage=True,
-        )
-        if self._use_cuda:
-            model.to("cuda")
-        return pipeline(
-            task="automatic-speech-recognition",
-            model=model,
-            tokenizer=processor.tokenizer,
-            feature_extractor=processor.feature_extractor,
-            device=0 if self._use_cuda else -1,
+            dtype=torch_dtype,
+            device_map=device_map,
         )
 
     def start_cleanup(self) -> None:
@@ -130,14 +121,14 @@ class ModelManager:
     def acquire(self):
         with self._lock:
             self._active_requests += 1
-            if self._pipeline is None:
+            if self._model is None:
                 try:
-                    self._pipeline = self._build_pipeline()
+                    self._model = self._build_model()
                 except Exception:
                     self._active_requests = max(0, self._active_requests - 1)
                     raise
             self._last_used = time.time()
-            return self._pipeline
+            return self._model
 
     def release(self) -> None:
         with self._lock:
@@ -146,7 +137,7 @@ class ModelManager:
 
     @property
     def is_loaded(self) -> bool:
-        return self._pipeline is not None
+        return self._model is not None
 
     def _cleanup_loop(self) -> None:
         while not self._shutdown.is_set():
@@ -155,11 +146,11 @@ class ModelManager:
                 continue
             with self._lock:
                 if (
-                    self._pipeline is not None
+                    self._model is not None
                     and self._active_requests == 0
                     and (time.time() - self._last_used) >= self._idle_timeout
                 ):
-                    self._pipeline = None
+                    self._model = None
                     if self._use_cuda:
                         torch.cuda.empty_cache()
                     gc.collect()
@@ -168,12 +159,16 @@ class ModelManager:
 model_manager = ModelManager(MODEL_ID, MODEL_CACHE_DIR, MODEL_IDLE_TIMEOUT)
 
 
-def run_transcription(samples: np.ndarray) -> dict:
+def run_transcription(samples: np.ndarray, language: Optional[str] = None) -> object:
     INFERENCE_SEMAPHORE.acquire()
     try:
-        pipe = model_manager.acquire()
+        model = model_manager.acquire()
         try:
-            return pipe(samples, sampling_rate=WAV_SAMPLE_RATE)
+            results = model.transcribe(
+                audio=(samples, WAV_SAMPLE_RATE),
+                language=language,
+            )
+            return results[0]
         finally:
             model_manager.release()
     finally:
@@ -193,6 +188,20 @@ app = FastAPI(title="Qwen3-ASR OpenAI-Compatible API", lifespan=lifespan)
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": model_manager.is_loaded}
+
+
+@app.get("/v1/models")
+async def list_models():
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": MODEL_NAME,
+                "object": "model",
+                "owned_by": "qwen",
+            }
+        ],
+    }
 
 
 @app.post("/v1/audio/transcriptions")
@@ -223,15 +232,16 @@ async def transcriptions(
             ),
         ) from None
     try:
-        result = await run_in_threadpool(run_transcription, samples)
+        result = await run_in_threadpool(run_transcription, samples, language)
     except Exception:
         logger.exception("ASR inference failed.")
         raise HTTPException(status_code=500, detail="ASR inference failed.") from None
-    text = result.get("text") if isinstance(result, dict) else str(result)
+    text = result.text if hasattr(result, "text") else str(result)
+    detected_language = result.language if hasattr(result, "language") else language
     if response_format == "text":
         return PlainTextResponse(text)
     if response_format == "verbose_json":
-        return JSONResponse({"text": text, "language": language or "unknown", "duration": duration})
+        return JSONResponse({"text": text, "language": detected_language or "unknown", "duration": duration})
     if response_format != "json":
         raise HTTPException(status_code=400, detail="Unsupported response_format.")
     return {"text": text}
