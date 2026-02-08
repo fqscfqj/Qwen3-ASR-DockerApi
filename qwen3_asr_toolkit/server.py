@@ -19,9 +19,10 @@ MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-ASR-1.7B")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR")
 MODEL_IDLE_TIMEOUT = int(os.getenv("MODEL_IDLE_TIMEOUT", "600"))
 MODEL_DEVICE = os.getenv("MODEL_DEVICE", "auto")
+MODEL_ALIASES = {MODEL_ID, "whisper-1"}
 
 
-def resolve_device() -> bool:
+def should_use_cuda() -> bool:
     if MODEL_DEVICE.lower() == "cuda":
         return True
     if MODEL_DEVICE.lower() == "cpu":
@@ -30,7 +31,21 @@ def resolve_device() -> bool:
 
 
 def decode_audio(data: bytes, filename: Optional[str]) -> Tuple[np.ndarray, float]:
-    suffix = os.path.splitext(filename or "")[1] or ".tmp"
+    allowed_suffixes = {
+        ".wav",
+        ".mp3",
+        ".m4a",
+        ".flac",
+        ".ogg",
+        ".opus",
+        ".webm",
+        ".mp4",
+        ".mkv",
+        ".aac",
+    }
+    suffix = os.path.splitext(filename or "")[1].lower()
+    if suffix not in allowed_suffixes:
+        suffix = ".tmp"
     with tempfile.NamedTemporaryFile(suffix=suffix) as tmp_file:
         tmp_file.write(data)
         tmp_file.flush()
@@ -49,7 +64,7 @@ class ModelManager:
         self._model_id = model_id
         self._cache_dir = cache_dir
         self._idle_timeout = idle_timeout
-        self._use_cuda = resolve_device()
+        self._use_cuda = should_use_cuda()
         self._pipeline = None
         self._last_used = 0.0
         self._active_requests = 0
@@ -154,6 +169,8 @@ async def transcriptions(
     prompt: Optional[str] = Form(None),
     response_format: str = Form("json"),
 ):
+    if model and model not in MODEL_ALIASES:
+        raise HTTPException(status_code=400, detail=f"Unsupported model '{model}'.")
     if not file:
         raise HTTPException(status_code=400, detail="Missing audio file.")
     data = await file.read()

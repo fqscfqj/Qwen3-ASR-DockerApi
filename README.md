@@ -35,6 +35,8 @@ curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
   -F response_format=json
 ```
 
+The endpoint accepts OpenAI form fields like `model`, `language`, and `prompt` for compatibility. `model` defaults to `Qwen/Qwen3-ASR-1.7B` and also accepts the `whisper-1` alias; `language` and `prompt` are currently accepted but not applied to inference.
+
 ### Configuration
 
 | Environment Variable | Default | Description |
