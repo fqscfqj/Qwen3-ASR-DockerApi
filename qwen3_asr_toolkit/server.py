@@ -214,7 +214,10 @@ async def transcriptions(
         logger.exception("Failed to decode audio upload.")
         raise HTTPException(
             status_code=400,
-            detail="Failed to decode audio. Ensure the file is a supported audio format.",
+            detail=(
+                "Failed to decode audio. Supported formats: wav, mp3, m4a, flac, ogg, "
+                "opus, webm, mp4, mkv, aac."
+            ),
         ) from None
     try:
         result = await run_in_threadpool(run_transcription, samples)
