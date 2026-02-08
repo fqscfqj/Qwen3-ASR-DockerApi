@@ -4,7 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MODEL_ID=Qwen/Qwen3-ASR-1.7B \
     MODEL_NAME=qwen-asr \
-    MODEL_CACHE_DIR=/models
+    MODEL_CACHE_DIR=/models \
+    API_KEY=
 
 WORKDIR /app
 

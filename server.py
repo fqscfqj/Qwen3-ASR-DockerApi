@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydub import AudioSegment
@@ -27,6 +27,7 @@ MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 MAX_CONCURRENT_INFERENCES = max(1, int(os.getenv("MAX_CONCURRENT_INFERENCES", "1")))
 INFERENCE_SEMAPHORE = threading.Semaphore(MAX_CONCURRENT_INFERENCES)
 UPLOAD_CHUNK_SIZE = 1024 * 1024
+API_KEY = os.getenv("API_KEY")
 
 logger = logging.getLogger("server")
 
@@ -201,13 +202,32 @@ app.add_middleware(
 )
 
 
+def require_api_key(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+) -> None:
+    if not API_KEY:
+        return
+    if x_api_key and x_api_key == API_KEY:
+        return
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        if token == API_KEY:
+            return
+    raise HTTPException(status_code=401, detail="Unauthorized")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": model_manager.is_loaded}
 
 
 @app.get("/v1/models")
-async def list_models():
+async def list_models(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    require_api_key(x_api_key=x_api_key, authorization=authorization)
     return {
         "object": "list",
         "data": [
@@ -228,8 +248,11 @@ async def transcriptions(
     language: Optional[str] = Form(None),
     prompt: Optional[str] = Form(None),
     response_format: str = Form("json"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
     """OpenAI-compatible transcription endpoint (model/language/prompt accepted for compatibility)."""
+    require_api_key(x_api_key=x_api_key, authorization=authorization)
     if model and model.lower() not in MODEL_ALIASES:
         raise HTTPException(status_code=400, detail="Unsupported model.")
     if not file:

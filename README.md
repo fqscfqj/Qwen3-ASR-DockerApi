@@ -12,6 +12,7 @@
 docker run --gpus all -p 8000:8000 \
   -e MODEL_DEVICE=auto \
   -e MODEL_IDLE_TIMEOUT=600 \
+  -e API_KEY=your-key \
   ghcr.io/fqscfqj/qwen3-asr-dockerapi:latest
 ```
 
@@ -21,6 +22,7 @@ docker run --gpus all -p 8000:8000 \
 docker run -p 8000:8000 \
   -e MODEL_DEVICE=cpu \
   -e MODEL_IDLE_TIMEOUT=600 \
+  -e API_KEY=your-key \
   ghcr.io/fqscfqj/qwen3-asr-dockerapi:latest
 ```
 
@@ -55,7 +57,8 @@ uvicorn server:app --host 0.0.0.0 --port 8000
 curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
   -F file=@/path/to/audio.wav \
   -F model=qwen-asr \
-  -F response_format=json
+  -F response_format=json \
+  -H "Authorization: Bearer your-key"
 ```
 
 支持 OpenAI 的 `model`/`language`/`prompt` 字段，`model` 仅支持 `qwen-asr` 与 `whisper-1`。
@@ -73,6 +76,7 @@ curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
 | `MAX_UPLOAD_MB` | `100` | 最大上传文件大小（MB） |
 | `MAX_CONCURRENT_INFERENCES` | `1` | 并发推理数 |
 | `PORT` | `8000` | 服务端口 |
+| `API_KEY` | 空 | 可选鉴权密钥。设置后需要在请求中携带 `Authorization: Bearer <key>` 或 `X-API-Key` |
 
 ## ✅ 健康检查
 
