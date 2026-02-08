@@ -23,15 +23,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ env.IMAGE_NAME }}
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }},ghcr.io/${{ github.repository }}:latest
+          tags: ${{ steps.meta.outputs.tags }},${{ env.IMAGE_NAME }}:latest
           labels: ${{ steps.meta.outputs.labels }}
