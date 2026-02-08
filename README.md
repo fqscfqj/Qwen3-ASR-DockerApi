@@ -42,6 +42,13 @@ docker compose pull
 docker build -t qwen3-asr-dockerapi .
 ```
 
+### 本地运行（非容器）
+
+```bash
+pip install -r requirements.txt
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
 ## 📡 接口示例
 
 ```bash
