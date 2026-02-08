@@ -212,7 +212,10 @@ async def transcriptions(
         samples, duration = await run_in_threadpool(decode_audio, data, file.filename)
     except Exception:
         logger.exception("Failed to decode audio upload.")
-        raise HTTPException(status_code=400, detail="Failed to decode audio.") from None
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to decode audio. Ensure the file is a supported audio format.",
+        ) from None
     try:
         result = await run_in_threadpool(run_transcription, samples)
     except Exception:
