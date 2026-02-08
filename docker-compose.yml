@@ -9,6 +9,8 @@ services:
       MODEL_DEVICE: auto
       MODEL_IDLE_TIMEOUT: 600
       API_KEY: ""
+    volumes:
+      - ./models:/models
     deploy:
       resources:
         reservations:

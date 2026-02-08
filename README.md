@@ -32,6 +32,8 @@ docker run -p 8000:8000 \
 docker compose up
 ```
 
+默认会挂载 `./models:/models` 以缓存模型。
+
 建议先拉取最新镜像：
 
 ```bash
@@ -62,6 +64,7 @@ curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
 ```
 
 支持 OpenAI 的 `model`/`language`/`prompt` 字段，`model` 仅支持 `qwen-asr` 与 `whisper-1`。
+如果设置了 `MODEL_NAME`，该值也会作为可用的 `model` 别名。
 
 ## ⚙️ 环境变量
 
@@ -81,7 +84,8 @@ curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
 ## ✅ 健康检查
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/health \
+  -H "Authorization: Bearer your-key"
 ```
 
 返回示例：

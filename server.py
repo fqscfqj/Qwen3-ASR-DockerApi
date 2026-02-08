@@ -18,10 +18,13 @@ from starlette.concurrency import run_in_threadpool
 
 WAV_SAMPLE_RATE = 16000
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-ASR-1.7B")
+MODEL_NAME = os.getenv("MODEL_NAME")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR")
 MODEL_IDLE_TIMEOUT = int(os.getenv("MODEL_IDLE_TIMEOUT", "600"))
 MODEL_DEVICE = os.getenv("MODEL_DEVICE", "auto")
 MODEL_ALIASES = {"whisper-1", "qwen-asr"}
+if MODEL_NAME:
+    MODEL_ALIASES.add(MODEL_NAME.strip().lower())
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 MAX_CONCURRENT_INFERENCES = max(1, int(os.getenv("MAX_CONCURRENT_INFERENCES", "1")))
@@ -218,7 +221,11 @@ def require_api_key(
 
 
 @app.get("/health")
-async def health():
+async def health(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    require_api_key(x_api_key=x_api_key, authorization=authorization)
     return {"status": "ok", "model_loaded": model_manager.is_loaded}
 
 
@@ -236,7 +243,7 @@ async def list_models(
                 "object": "model",
                 "owned_by": "qwen",
             }
-            for model_id in MODEL_ALIASES
+            for model_id in sorted(MODEL_ALIASES)
         ],
     }
 
