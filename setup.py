@@ -12,12 +12,18 @@ setup(
         'silero_vad',
         'pydub',
         'tqdm',
-        'numpy',
-        'srt'
+        'numpy>=1.26.4',
+        'srt',
+        'fastapi>=0.115.2',
+        'uvicorn>=0.30.6',
+        'python-multipart>=0.0.22',
+        'transformers>=4.48.1',
+        'torch>=2.6.0'
     ],
     entry_points={
         'console_scripts': [
-            'qwen3-asr=qwen3_asr_toolkit.call_api:main'
+            'qwen3-asr=qwen3_asr_toolkit.call_api:main',
+            'qwen3-asr-server=qwen3_asr_toolkit.server:main'
         ]
     },
     author='He Wang',

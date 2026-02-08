@@ -13,6 +13,41 @@ Qwen3-ASR is now **open-sourced** 🎉🎉🎉. Welcome to visit the [**GitHub**
 
 An advanced, high-performance Python command-line toolkit for using the **Qwen-ASR API** (formerly Qwen3-ASR-Flash). This implementation overcomes the API's 3-minute audio length limitation by intelligently splitting long audio/video files and processing them in parallel, enabling rapid transcription of hours-long content.
 
+## 🐳 OpenAI-Compatible Docker API Server
+
+This repository now includes a FastAPI service that exposes an OpenAI-compatible `/v1/audio/transcriptions` endpoint backed by the **Qwen/Qwen3-ASR-1.7B** model. The model is downloaded automatically on first request, runs on CUDA when available, lazily loads, and frees GPU memory after a period of inactivity.
+
+### Run with Docker
+
+```bash
+docker build -t qwen3-asr-api .
+docker run --gpus all -p 8000:8000 \
+  -e MODEL_IDLE_TIMEOUT=600 \
+  -e MODEL_DEVICE=auto \
+  qwen3-asr-api
+```
+
+### Request Example
+
+```bash
+curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
+  -F file=@/path/to/audio.wav \
+  -F response_format=json
+```
+
+### Configuration
+
+| Environment Variable | Default | Description |
+| --- | --- | --- |
+| `MODEL_ID` | `Qwen/Qwen3-ASR-1.7B` | Hugging Face model ID to load automatically |
+| `MODEL_CACHE_DIR` | `/models` (Docker) | Cache directory for model downloads |
+| `MODEL_DEVICE` | `auto` | `auto`, `cuda`, or `cpu` |
+| `MODEL_IDLE_TIMEOUT` | `600` | Seconds before unloading the model to free GPU memory (`0` disables) |
+
+### GitHub Actions (GHCR)
+
+The workflow in `.github/workflows/docker-publish.yml` builds the Docker image and publishes it to `ghcr.io/<owner>/<repo>` on pushes to `main` or manual dispatch.
+
 ## 🚀 Key Features
 
 -   **Break the 3-Minute Limit**: Seamlessly transcribe audio and video files of any length by bypassing the official API's duration constraint.
