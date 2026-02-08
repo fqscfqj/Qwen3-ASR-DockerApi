@@ -196,10 +196,11 @@ async def list_models():
         "object": "list",
         "data": [
             {
-                "id": MODEL_NAME,
+                "id": model_id,
                 "object": "model",
                 "owned_by": "qwen",
             }
+            for model_id in MODEL_ALIASES
         ],
     }
 
