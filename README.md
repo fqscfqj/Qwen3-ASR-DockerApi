@@ -6,9 +6,20 @@
 
 ### 使用预构建镜像
 
+#### GPU（需要 NVIDIA Container Toolkit）
+
 ```bash
 docker run --gpus all -p 8000:8000 \
   -e MODEL_DEVICE=auto \
+  -e MODEL_IDLE_TIMEOUT=600 \
+  ghcr.io/fqscfqj/qwen3-asr-dockerapi:latest
+```
+
+#### CPU
+
+```bash
+docker run -p 8000:8000 \
+  -e MODEL_DEVICE=cpu \
   -e MODEL_IDLE_TIMEOUT=600 \
   ghcr.io/fqscfqj/qwen3-asr-dockerapi:latest
 ```
@@ -19,10 +30,10 @@ docker run --gpus all -p 8000:8000 \
 docker compose up
 ```
 
-如需重新构建镜像，请使用：
+建议先拉取最新镜像：
 
 ```bash
-docker compose up --build
+docker compose pull
 ```
 
 ### 本地构建
