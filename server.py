@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydub import AudioSegment
 from qwen_asr import Qwen3ASRModel
 from starlette.concurrency import run_in_threadpool
@@ -182,6 +183,22 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Qwen3-ASR OpenAI-Compatible API", lifespan=lifespan)
+
+# CORS configuration (allow cross-origin requests from browsers)
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
+if CORS_ORIGINS.strip() == "*":
+    _cors_origins = ["*"]
+    _cors_allow_credentials = False
+else:
+    _cors_origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
+    _cors_allow_credentials = True
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_allow_credentials,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

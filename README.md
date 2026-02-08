@@ -68,6 +68,7 @@ curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
 | `MODEL_NAME` | `qwen-asr` | OpenAI 兼容的模型名 |
 | `MODEL_CACHE_DIR` | `/models` | 模型缓存目录 |
 | `MODEL_DEVICE` | `auto` | `auto`/`cuda`/`cpu` |
+| `CORS_ORIGINS` | `*` | 允许的 CORS 来源，逗号分隔。默认 `*` 表示允许所有来源（若需允许带凭据请求，请设置为具体 origin 列表） |
 | `MODEL_IDLE_TIMEOUT` | `600` | 空闲释放模型时间（秒） |
 | `MAX_UPLOAD_MB` | `100` | 最大上传文件大小（MB） |
 | `MAX_CONCURRENT_INFERENCES` | `1` | 并发推理数 |
