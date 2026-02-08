@@ -77,7 +77,10 @@ async def read_upload(file: UploadFile) -> bytes:
             break
         size += len(chunk)
         if size > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="Audio file is too large.")
+            raise HTTPException(
+                status_code=413,
+                detail=f"Audio file is too large. Max size is {MAX_UPLOAD_MB} MB.",
+            )
         chunks.append(chunk)
     return b"".join(chunks)
 
