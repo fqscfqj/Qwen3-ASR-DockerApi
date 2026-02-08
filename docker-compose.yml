@@ -1,7 +1,6 @@
 services:
   qwen3-asr:
     image: ghcr.io/fqscfqj/qwen3-asr-dockerapi:latest
-    pull_policy: always
     ports:
       - "8000:8000"
     environment:
