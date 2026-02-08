@@ -47,18 +47,18 @@ docker build -t qwen3-asr-dockerapi .
 ```bash
 curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
   -F file=@/path/to/audio.wav \
-  -F model=qwen3-asr-1.7b \
+  -F model=qwen-asr \
   -F response_format=json
 ```
 
-支持 OpenAI 的 `model`/`language`/`prompt` 字段，`model` 默认 `qwen3-asr-1.7b`，同时接受 `whisper-1` 别名。
+支持 OpenAI 的 `model`/`language`/`prompt` 字段，`model` 仅支持 `qwen-asr` 与 `whisper-1`。
 
 ## ⚙️ 环境变量
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `MODEL_ID` | `Qwen/Qwen3-ASR-1.7B` | Hugging Face 模型 ID |
-| `MODEL_NAME` | `qwen3-asr-1.7b` | OpenAI 兼容的模型名 |
+| `MODEL_NAME` | `qwen-asr` | OpenAI 兼容的模型名 |
 | `MODEL_CACHE_DIR` | `/models` | 模型缓存目录 |
 | `MODEL_DEVICE` | `auto` | `auto`/`cuda`/`cpu` |
 | `MODEL_IDLE_TIMEOUT` | `600` | 空闲释放模型时间（秒） |

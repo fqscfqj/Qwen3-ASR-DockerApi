@@ -5,7 +5,7 @@ services:
       - "8000:8000"
     environment:
       MODEL_ID: Qwen/Qwen3-ASR-1.7B
-      MODEL_NAME: qwen3-asr-1.7b
+      MODEL_NAME: qwen-asr
       MODEL_DEVICE: auto
       MODEL_IDLE_TIMEOUT: 600
     deploy:

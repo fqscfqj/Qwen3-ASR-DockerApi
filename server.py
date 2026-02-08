@@ -17,18 +17,17 @@ from starlette.concurrency import run_in_threadpool
 
 WAV_SAMPLE_RATE = 16000
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-ASR-1.7B")
-MODEL_NAME = os.getenv("MODEL_NAME", "qwen3-asr-1.7b")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR")
 MODEL_IDLE_TIMEOUT = int(os.getenv("MODEL_IDLE_TIMEOUT", "600"))
 MODEL_DEVICE = os.getenv("MODEL_DEVICE", "auto")
-MODEL_ALIASES = {MODEL_ID.lower(), MODEL_NAME.lower(), "whisper-1"}
+MODEL_ALIASES = {"whisper-1", "qwen-asr"}
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 MAX_CONCURRENT_INFERENCES = max(1, int(os.getenv("MAX_CONCURRENT_INFERENCES", "1")))
 INFERENCE_SEMAPHORE = threading.Semaphore(MAX_CONCURRENT_INFERENCES)
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 
-logger = logging.getLogger("qwen3_asr_toolkit.server")
+logger = logging.getLogger("server")
 
 
 def should_use_cuda() -> bool:
