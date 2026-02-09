@@ -85,8 +85,8 @@ def convert_to_srt(segments: list) -> str:
         text = get_segment_field(seg, "text", "")
         text = text.strip()
         if text:
-            lines.append(f"{i}\n{format_timestamp_srt(start)} --> {format_timestamp_srt(end)}\n{text}\n")
-    return "\n".join(lines)
+            lines.append(f"{i}\n{format_timestamp_srt(start)} --> {format_timestamp_srt(end)}\n{text}")
+    return "\n\n".join(lines)
 
 
 def convert_to_vtt(segments: list) -> str:
@@ -376,11 +376,11 @@ async def transcriptions(
     detected_language = result.language if hasattr(result, "language") else language
 
     # Extract segments if available
+    # Note: Checking both 'segments' (primary) and 'chunks' (potential alternative name) for robustness
     segments = []
     if hasattr(result, "segments") and result.segments:
         segments = result.segments
     elif hasattr(result, "chunks") and result.chunks:
-        # Fallback for potential alternative attribute name in different qwen_asr versions
         segments = result.chunks
     elif isinstance(result, dict):
         segments = result.get("segments", result.get("chunks", []))
@@ -406,7 +406,7 @@ async def transcriptions(
 
     # Handle different response formats
     if response_format == "json":
-        return {"text": text}
+        return JSONResponse({"text": text})
     elif response_format == "text":
         # For text format, prefer segments if available, otherwise use text
         if serializable_segments:
