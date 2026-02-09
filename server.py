@@ -35,6 +35,99 @@ API_KEY = os.getenv("API_KEY")
 logger = logging.getLogger("server")
 
 
+def get_segment_field(seg, field: str, default=None):
+    """Extract field from segment, handling both dict and object types."""
+    if isinstance(seg, dict):
+        return seg.get(field, default)
+    return getattr(seg, field, default)
+
+
+def create_error_response(status_code: int, message: str, error_type: str, code: str):
+    """Create a standardized error response."""
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "message": message,
+                "type": error_type,
+                "code": code,
+            }
+        },
+    )
+
+
+def format_timestamp_srt(seconds: float) -> str:
+    """Convert seconds to SRT timestamp format (HH:mm:ss,ms)."""
+    total_millis = int(round(seconds * 1000))
+    hours, remainder = divmod(total_millis, 3600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def format_timestamp_vtt(seconds: float) -> str:
+    """Convert seconds to WebVTT timestamp format (HH:mm:ss.ms)."""
+    total_millis = int(round(seconds * 1000))
+    hours, remainder = divmod(total_millis, 3600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
+
+
+def convert_to_srt(segments: list) -> str:
+    """Convert segments to SRT format."""
+    if not segments:
+        return ""
+    lines = []
+    cue_index = 1
+    for seg in segments:
+        start = get_segment_field(seg, "start", 0)
+        end = get_segment_field(seg, "end", 0)
+        text = get_segment_field(seg, "text", "")
+        text = text.strip()
+        if text:
+            lines.append(f"{cue_index}\n{format_timestamp_srt(start)} --> {format_timestamp_srt(end)}\n{text}")
+            cue_index += 1
+    return "\n\n".join(lines)
+
+
+def convert_to_vtt(segments: list) -> str:
+    """Convert segments to WebVTT format."""
+    if not segments:
+        return "WEBVTT\n\n"
+
+    cue_lines = []
+    for seg in segments:
+        start = get_segment_field(seg, "start", 0)
+        end = get_segment_field(seg, "end", 0)
+        text = get_segment_field(seg, "text", "")
+        text = text.strip()
+        if text:
+            cue_lines.append(
+                f"{format_timestamp_vtt(start)} --> {format_timestamp_vtt(end)}\n{text}"
+            )
+
+    # If there are no non-empty cues, still return a valid empty WebVTT file.
+    if not cue_lines:
+        return "WEBVTT\n\n"
+
+    # Header, blank line, then cues separated by a single blank line, ending with a newline.
+    return "WEBVTT\n\n" + "\n\n".join(cue_lines) + "\n"
+
+
+def convert_to_text(segments: list) -> str:
+    """Convert segments to plain text."""
+    if not segments:
+        return ""
+    texts = []
+    for seg in segments:
+        text = get_segment_field(seg, "text", "")
+        text = text.strip()
+        if text:
+            texts.append(text)
+    return " ".join(texts)
+
+
 def should_use_cuda() -> bool:
     if MODEL_DEVICE.lower() == "cuda":
         return True
@@ -282,16 +375,98 @@ async def transcriptions(
         result = await run_in_threadpool(run_transcription, samples, language)
     except Exception:
         logger.exception("ASR inference failed.")
-        raise HTTPException(status_code=500, detail="ASR inference failed.") from None
+        return create_error_response(
+            status_code=500,
+            message="ASR inference failed.",
+            error_type="server_error",
+            code="inference_error",
+        )
+    
+    # Extract text and segments from result
     text = result.text if hasattr(result, "text") else str(result)
     detected_language = result.language if hasattr(result, "language") else language
-    if response_format == "text":
-        return PlainTextResponse(text)
-    if response_format == "verbose_json":
-        return JSONResponse({"text": text, "language": detected_language or "unknown", "duration": duration})
-    if response_format != "json":
-        raise HTTPException(status_code=400, detail="Unsupported response_format.")
-    return {"text": text}
+
+    # Extract segments if available
+    # Note: Checking both 'segments' (primary) and 'chunks' (potential alternative name) for robustness
+    segments = []
+    if hasattr(result, "segments") and result.segments:
+        segments = result.segments
+    elif hasattr(result, "chunks") and result.chunks:
+        segments = result.chunks
+    elif isinstance(result, dict):
+        segments = result.get("segments") or result.get("chunks") or []
+
+    # Convert segments to serializable format (list of dicts)
+    serializable_segments = []
+    for seg in segments:
+        seg_dict = {
+            "start": get_segment_field(seg, "start", 0),
+            "end": get_segment_field(seg, "end", 0),
+            "text": get_segment_field(seg, "text", ""),
+        }
+        serializable_segments.append(seg_dict)
+
+    # Validate that we have data
+    if not text and not serializable_segments:
+        return create_error_response(
+            status_code=422,
+            message="No transcription data was generated from the audio.",
+            error_type="processing_error",
+            code="empty_result",
+        )
+
+    # Handle different response formats
+    if response_format == "json":
+        # Fallback to segments text if main text is empty
+        if text:
+            output_text = text
+        elif serializable_segments:
+            output_text = convert_to_text(serializable_segments)
+        else:
+            output_text = ""
+        return JSONResponse({"text": output_text})
+    elif response_format == "text":
+        # For text format, prefer segments if available, otherwise use text
+        if serializable_segments:
+            output_text = convert_to_text(serializable_segments)
+        else:
+            output_text = text
+        return PlainTextResponse(output_text, media_type="text/plain")
+    elif response_format == "verbose_json":
+        return JSONResponse({
+            "text": text,
+            "language": detected_language or "unknown",
+            "duration": duration,
+            "segments": serializable_segments,
+        })
+    elif response_format == "srt":
+        if not serializable_segments:
+            return create_error_response(
+                status_code=422,
+                message="SRT format requires segment timing data, but timing information is not available for this transcription.",
+                error_type="processing_error",
+                code="segments_unavailable",
+            )
+        srt_content = convert_to_srt(serializable_segments)
+        return PlainTextResponse(srt_content, media_type="text/plain")
+    elif response_format == "vtt":
+        if not serializable_segments:
+            return create_error_response(
+                status_code=422,
+                message="VTT format requires segment timing data, but timing information is not available for this transcription.",
+                error_type="processing_error",
+                code="segments_unavailable",
+            )
+        vtt_content = convert_to_vtt(serializable_segments)
+        return PlainTextResponse(vtt_content, media_type="text/plain")
+    else:
+        # Unsupported format
+        return create_error_response(
+            status_code=400,
+            message=f"Unsupported response_format: {response_format}. Supported formats: json, verbose_json, text, srt, vtt.",
+            error_type="invalid_request_error",
+            code="unsupported_format",
+        )
 
 
 def main() -> None:
