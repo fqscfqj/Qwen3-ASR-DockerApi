@@ -59,11 +59,13 @@ def convert_to_srt(segments: list) -> str:
         return ""
     lines = []
     for i, seg in enumerate(segments, start=1):
-        start = format_timestamp_srt(seg.get("start", 0))
-        end = format_timestamp_srt(seg.get("end", 0))
-        text = seg.get("text", "").strip()
+        # Handle both dict-like and object-like segments
+        start = seg.get("start", 0) if isinstance(seg, dict) else getattr(seg, "start", 0)
+        end = seg.get("end", 0) if isinstance(seg, dict) else getattr(seg, "end", 0)
+        text = seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+        text = text.strip()
         if text:
-            lines.append(f"{i}\n{start} --> {end}\n{text}\n")
+            lines.append(f"{i}\n{format_timestamp_srt(start)} --> {format_timestamp_srt(end)}\n{text}\n")
     return "\n".join(lines)
 
 
@@ -73,11 +75,13 @@ def convert_to_vtt(segments: list) -> str:
         return "WEBVTT\n\n"
     lines = ["WEBVTT\n"]
     for seg in segments:
-        start = format_timestamp_vtt(seg.get("start", 0))
-        end = format_timestamp_vtt(seg.get("end", 0))
-        text = seg.get("text", "").strip()
+        # Handle both dict-like and object-like segments
+        start = seg.get("start", 0) if isinstance(seg, dict) else getattr(seg, "start", 0)
+        end = seg.get("end", 0) if isinstance(seg, dict) else getattr(seg, "end", 0)
+        text = seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+        text = text.strip()
         if text:
-            lines.append(f"\n{start} --> {end}\n{text}\n")
+            lines.append(f"\n{format_timestamp_vtt(start)} --> {format_timestamp_vtt(end)}\n{text}\n")
     return "".join(lines)
 
 
@@ -85,7 +89,14 @@ def convert_to_text(segments: list) -> str:
     """Convert segments to plain text."""
     if not segments:
         return ""
-    return " ".join(seg.get("text", "").strip() for seg in segments if seg.get("text", "").strip())
+    texts = []
+    for seg in segments:
+        # Handle both dict-like and object-like segments
+        text = seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+        text = text.strip()
+        if text:
+            texts.append(text)
+    return " ".join(texts)
 
 
 def should_use_cuda() -> bool:
