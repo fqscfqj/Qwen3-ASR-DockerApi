@@ -35,6 +35,59 @@ API_KEY = os.getenv("API_KEY")
 logger = logging.getLogger("server")
 
 
+def format_timestamp_srt(seconds: float) -> str:
+    """Convert seconds to SRT timestamp format (HH:mm:ss,ms)."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds % 1) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def format_timestamp_vtt(seconds: float) -> str:
+    """Convert seconds to WebVTT timestamp format (HH:mm:ss.ms)."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds % 1) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
+
+
+def convert_to_srt(segments: list) -> str:
+    """Convert segments to SRT format."""
+    if not segments:
+        return ""
+    lines = []
+    for i, seg in enumerate(segments, start=1):
+        start = format_timestamp_srt(seg.get("start", 0))
+        end = format_timestamp_srt(seg.get("end", 0))
+        text = seg.get("text", "").strip()
+        if text:
+            lines.append(f"{i}\n{start} --> {end}\n{text}\n")
+    return "\n".join(lines)
+
+
+def convert_to_vtt(segments: list) -> str:
+    """Convert segments to WebVTT format."""
+    if not segments:
+        return "WEBVTT\n\n"
+    lines = ["WEBVTT\n"]
+    for seg in segments:
+        start = format_timestamp_vtt(seg.get("start", 0))
+        end = format_timestamp_vtt(seg.get("end", 0))
+        text = seg.get("text", "").strip()
+        if text:
+            lines.append(f"\n{start} --> {end}\n{text}\n")
+    return "".join(lines)
+
+
+def convert_to_text(segments: list) -> str:
+    """Convert segments to plain text."""
+    if not segments:
+        return ""
+    return " ".join(seg.get("text", "").strip() for seg in segments if seg.get("text", "").strip())
+
+
 def should_use_cuda() -> bool:
     if MODEL_DEVICE.lower() == "cuda":
         return True
@@ -282,16 +335,105 @@ async def transcriptions(
         result = await run_in_threadpool(run_transcription, samples, language)
     except Exception:
         logger.exception("ASR inference failed.")
-        raise HTTPException(status_code=500, detail="ASR inference failed.") from None
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "message": "ASR inference failed.",
+                    "type": "server_error",
+                    "code": "inference_error",
+                }
+            },
+        )
+    
+    # Extract text and segments from result
     text = result.text if hasattr(result, "text") else str(result)
     detected_language = result.language if hasattr(result, "language") else language
+    
+    # Extract segments if available
+    segments = []
+    if hasattr(result, "segments") and result.segments:
+        segments = result.segments
+    elif hasattr(result, "chunks") and result.chunks:
+        # Some versions might use 'chunks' instead of 'segments'
+        segments = result.chunks
+    elif isinstance(result, dict):
+        segments = result.get("segments", result.get("chunks", []))
+    
+    # Validate that we have data
+    if not text and not segments:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "message": "No transcription data was generated.",
+                    "type": "server_error",
+                    "code": "empty_result",
+                }
+            },
+        )
+    
+    # Handle different response formats
+    if response_format == "json":
+        return {"text": text}
+    
     if response_format == "text":
-        return PlainTextResponse(text)
+        # For text format, prefer segments if available, otherwise use text
+        if segments:
+            output_text = convert_to_text(segments)
+        else:
+            output_text = text
+        return PlainTextResponse(output_text, media_type="text/plain")
+    
     if response_format == "verbose_json":
-        return JSONResponse({"text": text, "language": detected_language or "unknown", "duration": duration})
-    if response_format != "json":
-        raise HTTPException(status_code=400, detail="Unsupported response_format.")
-    return {"text": text}
+        return JSONResponse({
+            "text": text,
+            "language": detected_language or "unknown",
+            "duration": duration,
+            "segments": segments,
+        })
+    
+    if response_format == "srt":
+        if not segments:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "message": "SRT format requires segment timing data, but none was generated.",
+                        "type": "invalid_request_error",
+                        "code": "segments_unavailable",
+                    }
+                },
+            )
+        srt_content = convert_to_srt(segments)
+        return PlainTextResponse(srt_content, media_type="text/plain")
+    
+    if response_format == "vtt":
+        if not segments:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "message": "VTT format requires segment timing data, but none was generated.",
+                        "type": "invalid_request_error",
+                        "code": "segments_unavailable",
+                    }
+                },
+            )
+        vtt_content = convert_to_vtt(segments)
+        return PlainTextResponse(vtt_content, media_type="text/plain")
+    
+    # Unsupported format
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "message": f"Unsupported response_format: {response_format}. Supported formats: json, verbose_json, text, srt, vtt.",
+                "type": "invalid_request_error",
+                "code": "unsupported_format",
+            }
+        },
+    )
 
 
 def main() -> None:
