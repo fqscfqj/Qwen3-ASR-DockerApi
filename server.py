@@ -407,7 +407,12 @@ async def transcriptions(
     # Handle different response formats
     if response_format == "json":
         # Fallback to segments text if main text is empty
-        output_text = text or (convert_to_text(serializable_segments) if serializable_segments else "")
+        if text:
+            output_text = text
+        elif serializable_segments:
+            output_text = convert_to_text(serializable_segments)
+        else:
+            output_text = ""
         return JSONResponse({"text": output_text})
     elif response_format == "text":
         # For text format, prefer segments if available, otherwise use text
