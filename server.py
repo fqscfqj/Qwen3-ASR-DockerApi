@@ -406,7 +406,9 @@ async def transcriptions(
 
     # Handle different response formats
     if response_format == "json":
-        return JSONResponse({"text": text})
+        # Fallback to segments text if main text is empty
+        output_text = text or (convert_to_text(serializable_segments) if serializable_segments else "")
+        return JSONResponse({"text": output_text})
     elif response_format == "text":
         # For text format, prefer segments if available, otherwise use text
         if serializable_segments:
@@ -425,7 +427,7 @@ async def transcriptions(
         if not serializable_segments:
             return create_error_response(
                 status_code=422,
-                message="SRT format requires segment timing data, but the model did not generate segments for this audio.",
+                message="SRT format requires segment timing data, but timing information is not available for this transcription.",
                 error_type="processing_error",
                 code="segments_unavailable",
             )
@@ -435,7 +437,7 @@ async def transcriptions(
         if not serializable_segments:
             return create_error_response(
                 status_code=422,
-                message="VTT format requires segment timing data, but the model did not generate segments for this audio.",
+                message="VTT format requires segment timing data, but timing information is not available for this transcription.",
                 error_type="processing_error",
                 code="segments_unavailable",
             )
