@@ -35,6 +35,27 @@ API_KEY = os.getenv("API_KEY")
 logger = logging.getLogger("server")
 
 
+def get_segment_field(seg, field: str, default=None):
+    """Extract field from segment, handling both dict and object types."""
+    if isinstance(seg, dict):
+        return seg.get(field, default)
+    return getattr(seg, field, default)
+
+
+def create_error_response(status_code: int, message: str, error_type: str, code: str):
+    """Create a standardized error response."""
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "message": message,
+                "type": error_type,
+                "code": code,
+            }
+        },
+    )
+
+
 def format_timestamp_srt(seconds: float) -> str:
     """Convert seconds to SRT timestamp format (HH:mm:ss,ms)."""
     hours = int(seconds // 3600)
@@ -59,10 +80,9 @@ def convert_to_srt(segments: list) -> str:
         return ""
     lines = []
     for i, seg in enumerate(segments, start=1):
-        # Handle both dict-like and object-like segments
-        start = seg.get("start", 0) if isinstance(seg, dict) else getattr(seg, "start", 0)
-        end = seg.get("end", 0) if isinstance(seg, dict) else getattr(seg, "end", 0)
-        text = seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+        start = get_segment_field(seg, "start", 0)
+        end = get_segment_field(seg, "end", 0)
+        text = get_segment_field(seg, "text", "")
         text = text.strip()
         if text:
             lines.append(f"{i}\n{format_timestamp_srt(start)} --> {format_timestamp_srt(end)}\n{text}\n")
@@ -75,10 +95,9 @@ def convert_to_vtt(segments: list) -> str:
         return "WEBVTT\n\n"
     lines = ["WEBVTT\n"]
     for seg in segments:
-        # Handle both dict-like and object-like segments
-        start = seg.get("start", 0) if isinstance(seg, dict) else getattr(seg, "start", 0)
-        end = seg.get("end", 0) if isinstance(seg, dict) else getattr(seg, "end", 0)
-        text = seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+        start = get_segment_field(seg, "start", 0)
+        end = get_segment_field(seg, "end", 0)
+        text = get_segment_field(seg, "text", "")
         text = text.strip()
         if text:
             lines.append(f"\n{format_timestamp_vtt(start)} --> {format_timestamp_vtt(end)}\n{text}\n")
@@ -91,8 +110,7 @@ def convert_to_text(segments: list) -> str:
         return ""
     texts = []
     for seg in segments:
-        # Handle both dict-like and object-like segments
-        text = seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+        text = get_segment_field(seg, "text", "")
         text = text.strip()
         if text:
             texts.append(text)
@@ -346,15 +364,11 @@ async def transcriptions(
         result = await run_in_threadpool(run_transcription, samples, language)
     except Exception:
         logger.exception("ASR inference failed.")
-        return JSONResponse(
+        return create_error_response(
             status_code=500,
-            content={
-                "error": {
-                    "message": "ASR inference failed.",
-                    "type": "server_error",
-                    "code": "inference_error",
-                }
-            },
+            message="ASR inference failed.",
+            error_type="server_error",
+            code="inference_error",
         )
     
     # Extract text and segments from result
@@ -373,15 +387,11 @@ async def transcriptions(
     
     # Validate that we have data
     if not text and not segments:
-        return JSONResponse(
+        return create_error_response(
             status_code=500,
-            content={
-                "error": {
-                    "message": "No transcription data was generated.",
-                    "type": "server_error",
-                    "code": "empty_result",
-                }
-            },
+            message="No transcription data was generated.",
+            error_type="server_error",
+            code="empty_result",
         )
     
     # Handle different response formats
@@ -406,44 +416,32 @@ async def transcriptions(
     
     if response_format == "srt":
         if not segments:
-            return JSONResponse(
+            return create_error_response(
                 status_code=400,
-                content={
-                    "error": {
-                        "message": "SRT format requires segment timing data, but none was generated.",
-                        "type": "invalid_request_error",
-                        "code": "segments_unavailable",
-                    }
-                },
+                message="SRT format requires segment timing data, but none was generated.",
+                error_type="invalid_request_error",
+                code="segments_unavailable",
             )
         srt_content = convert_to_srt(segments)
         return PlainTextResponse(srt_content, media_type="text/plain")
     
     if response_format == "vtt":
         if not segments:
-            return JSONResponse(
+            return create_error_response(
                 status_code=400,
-                content={
-                    "error": {
-                        "message": "VTT format requires segment timing data, but none was generated.",
-                        "type": "invalid_request_error",
-                        "code": "segments_unavailable",
-                    }
-                },
+                message="VTT format requires segment timing data, but none was generated.",
+                error_type="invalid_request_error",
+                code="segments_unavailable",
             )
         vtt_content = convert_to_vtt(segments)
         return PlainTextResponse(vtt_content, media_type="text/plain")
     
     # Unsupported format
-    return JSONResponse(
+    return create_error_response(
         status_code=400,
-        content={
-            "error": {
-                "message": f"Unsupported response_format: {response_format}. Supported formats: json, verbose_json, text, srt, vtt.",
-                "type": "invalid_request_error",
-                "code": "unsupported_format",
-            }
-        },
+        message=f"Unsupported response_format: {response_format}. Supported formats: json, verbose_json, text, srt, vtt.",
+        error_type="invalid_request_error",
+        code="unsupported_format",
     )
 
 
