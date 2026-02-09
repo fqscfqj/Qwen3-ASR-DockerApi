@@ -374,17 +374,17 @@ async def transcriptions(
     # Extract text and segments from result
     text = result.text if hasattr(result, "text") else str(result)
     detected_language = result.language if hasattr(result, "language") else language
-    
+
     # Extract segments if available
     segments = []
     if hasattr(result, "segments") and result.segments:
         segments = result.segments
     elif hasattr(result, "chunks") and result.chunks:
-        # Some versions might use 'chunks' instead of 'segments'
+        # Fallback for potential alternative attribute name in different qwen_asr versions
         segments = result.chunks
     elif isinstance(result, dict):
         segments = result.get("segments", result.get("chunks", []))
-    
+
     # Convert segments to serializable format (list of dicts)
     serializable_segments = []
     for seg in segments:
@@ -394,37 +394,34 @@ async def transcriptions(
             "text": get_segment_field(seg, "text", ""),
         }
         serializable_segments.append(seg_dict)
-    
+
     # Validate that we have data
     if not text and not serializable_segments:
         return create_error_response(
-            status_code=500,
-            message="No transcription data was generated.",
-            error_type="server_error",
+            status_code=422,
+            message="No transcription data was generated from the audio.",
+            error_type="processing_error",
             code="empty_result",
         )
-    
+
     # Handle different response formats
     if response_format == "json":
         return {"text": text}
-    
-    if response_format == "text":
+    elif response_format == "text":
         # For text format, prefer segments if available, otherwise use text
         if serializable_segments:
             output_text = convert_to_text(serializable_segments)
         else:
             output_text = text
         return PlainTextResponse(output_text, media_type="text/plain")
-    
-    if response_format == "verbose_json":
+    elif response_format == "verbose_json":
         return JSONResponse({
             "text": text,
             "language": detected_language or "unknown",
             "duration": duration,
             "segments": serializable_segments,
         })
-    
-    if response_format == "srt":
+    elif response_format == "srt":
         if not serializable_segments:
             return create_error_response(
                 status_code=422,
@@ -434,8 +431,7 @@ async def transcriptions(
             )
         srt_content = convert_to_srt(serializable_segments)
         return PlainTextResponse(srt_content, media_type="text/plain")
-    
-    if response_format == "vtt":
+    elif response_format == "vtt":
         if not serializable_segments:
             return create_error_response(
                 status_code=422,
@@ -445,14 +441,14 @@ async def transcriptions(
             )
         vtt_content = convert_to_vtt(serializable_segments)
         return PlainTextResponse(vtt_content, media_type="text/plain")
-    
-    # Unsupported format
-    return create_error_response(
-        status_code=400,
-        message=f"Unsupported response_format: {response_format}. Supported formats: json, verbose_json, text, srt, vtt.",
-        error_type="invalid_request_error",
-        code="unsupported_format",
-    )
+    else:
+        # Unsupported format
+        return create_error_response(
+            status_code=400,
+            message=f"Unsupported response_format: {response_format}. Supported formats: json, verbose_json, text, srt, vtt.",
+            error_type="invalid_request_error",
+            code="unsupported_format",
+        )
 
 
 def main() -> None:
