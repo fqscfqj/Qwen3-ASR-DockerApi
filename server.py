@@ -58,19 +58,19 @@ def create_error_response(status_code: int, message: str, error_type: str, code:
 
 def format_timestamp_srt(seconds: float) -> str:
     """Convert seconds to SRT timestamp format (HH:mm:ss,ms)."""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
+    total_millis = int(round(seconds * 1000))
+    hours, remainder = divmod(total_millis, 3600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
 def format_timestamp_vtt(seconds: float) -> str:
     """Convert seconds to WebVTT timestamp format (HH:mm:ss.ms)."""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
+    total_millis = int(round(seconds * 1000))
+    hours, remainder = divmod(total_millis, 3600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
 
 
@@ -79,13 +79,15 @@ def convert_to_srt(segments: list) -> str:
     if not segments:
         return ""
     lines = []
-    for i, seg in enumerate(segments, start=1):
+    cue_index = 1
+    for seg in segments:
         start = get_segment_field(seg, "start", 0)
         end = get_segment_field(seg, "end", 0)
         text = get_segment_field(seg, "text", "")
         text = text.strip()
         if text:
-            lines.append(f"{i}\n{format_timestamp_srt(start)} --> {format_timestamp_srt(end)}\n{text}")
+            lines.append(f"{cue_index}\n{format_timestamp_srt(start)} --> {format_timestamp_srt(end)}\n{text}")
+            cue_index += 1
     return "\n\n".join(lines)
 
 
@@ -93,15 +95,24 @@ def convert_to_vtt(segments: list) -> str:
     """Convert segments to WebVTT format."""
     if not segments:
         return "WEBVTT\n\n"
-    lines = ["WEBVTT\n"]
+
+    cue_lines = []
     for seg in segments:
         start = get_segment_field(seg, "start", 0)
         end = get_segment_field(seg, "end", 0)
         text = get_segment_field(seg, "text", "")
         text = text.strip()
         if text:
-            lines.append(f"\n{format_timestamp_vtt(start)} --> {format_timestamp_vtt(end)}\n{text}\n")
-    return "".join(lines)
+            cue_lines.append(
+                f"{format_timestamp_vtt(start)} --> {format_timestamp_vtt(end)}\n{text}"
+            )
+
+    # If there are no non-empty cues, still return a valid empty WebVTT file.
+    if not cue_lines:
+        return "WEBVTT\n\n"
+
+    # Header, blank line, then cues separated by a single blank line, ending with a newline.
+    return "WEBVTT\n\n" + "\n\n".join(cue_lines) + "\n"
 
 
 def convert_to_text(segments: list) -> str:
@@ -383,7 +394,7 @@ async def transcriptions(
     elif hasattr(result, "chunks") and result.chunks:
         segments = result.chunks
     elif isinstance(result, dict):
-        segments = result.get("segments", result.get("chunks", []))
+        segments = result.get("segments") or result.get("chunks") or []
 
     # Convert segments to serializable format (list of dicts)
     serializable_segments = []
