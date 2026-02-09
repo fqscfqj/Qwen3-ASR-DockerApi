@@ -385,8 +385,18 @@ async def transcriptions(
     elif isinstance(result, dict):
         segments = result.get("segments", result.get("chunks", []))
     
+    # Convert segments to serializable format (list of dicts)
+    serializable_segments = []
+    for seg in segments:
+        seg_dict = {
+            "start": get_segment_field(seg, "start", 0),
+            "end": get_segment_field(seg, "end", 0),
+            "text": get_segment_field(seg, "text", ""),
+        }
+        serializable_segments.append(seg_dict)
+    
     # Validate that we have data
-    if not text and not segments:
+    if not text and not serializable_segments:
         return create_error_response(
             status_code=500,
             message="No transcription data was generated.",
@@ -400,8 +410,8 @@ async def transcriptions(
     
     if response_format == "text":
         # For text format, prefer segments if available, otherwise use text
-        if segments:
-            output_text = convert_to_text(segments)
+        if serializable_segments:
+            output_text = convert_to_text(serializable_segments)
         else:
             output_text = text
         return PlainTextResponse(output_text, media_type="text/plain")
@@ -411,29 +421,29 @@ async def transcriptions(
             "text": text,
             "language": detected_language or "unknown",
             "duration": duration,
-            "segments": segments,
+            "segments": serializable_segments,
         })
     
     if response_format == "srt":
-        if not segments:
+        if not serializable_segments:
             return create_error_response(
-                status_code=400,
-                message="SRT format requires segment timing data, but none was generated.",
-                error_type="invalid_request_error",
+                status_code=422,
+                message="SRT format requires segment timing data, but the model did not generate segments for this audio.",
+                error_type="processing_error",
                 code="segments_unavailable",
             )
-        srt_content = convert_to_srt(segments)
+        srt_content = convert_to_srt(serializable_segments)
         return PlainTextResponse(srt_content, media_type="text/plain")
     
     if response_format == "vtt":
-        if not segments:
+        if not serializable_segments:
             return create_error_response(
-                status_code=400,
-                message="VTT format requires segment timing data, but none was generated.",
-                error_type="invalid_request_error",
+                status_code=422,
+                message="VTT format requires segment timing data, but the model did not generate segments for this audio.",
+                error_type="processing_error",
                 code="segments_unavailable",
             )
-        vtt_content = convert_to_vtt(segments)
+        vtt_content = convert_to_vtt(serializable_segments)
         return PlainTextResponse(vtt_content, media_type="text/plain")
     
     # Unsupported format
